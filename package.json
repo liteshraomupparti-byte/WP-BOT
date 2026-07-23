@@ -1,0 +1,20 @@
+{
+  "name": "mummy-shop-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Custom WhatsApp AI bot for saree/lehenga/jewellery shop",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "body-parser": "^2.3.0",
+    "dotenv": "^16.4.5",
+    "ejs": "^6.0.1",
+    "express": "^4.22.2",
+    "express-session": "^1.19.0",
+    "multer": "^2.2.0"
+  }
+}

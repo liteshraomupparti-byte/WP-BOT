@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>Edit Product</title>
+
+<style>
+
+body{
+font-family:Arial;
+background:#f5f5f5;
+margin:0;
+}
+
+.container{
+width:500px;
+margin:40px auto;
+background:white;
+padding:30px;
+border-radius:15px;
+box-shadow:0 10px 25px rgba(0,0,0,.15);
+}
+
+h2{
+text-align:center;
+margin-bottom:20px;
+}
+
+input,select{
+width:100%;
+padding:12px;
+margin-top:10px;
+margin-bottom:20px;
+font-size:16px;
+box-sizing:border-box;
+}
+
+img{
+width:200px;
+display:block;
+margin:10px auto 20px;
+border-radius:10px;
+}
+
+button{
+width:100%;
+padding:15px;
+background:#111;
+color:white;
+border:none;
+border-radius:8px;
+font-size:18px;
+cursor:pointer;
+}
+
+button:hover{
+background:#d4af37;
+color:black;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>Edit Product</h2>
+
+<form action="/admin/edit-product/<%= product.id %>" method="POST" enctype="multipart/form-data">
+
+<label>Category</label>
+
+<select name="category">
+
+<option value="Sarees" <%= product.category=="Sarees"?"selected":"" %>>Sarees</option>
+
+<option value="Lehengas" <%= product.category=="Lehengas"?"selected":"" %>>Lehengas</option>
+
+<option value="Jewellery" <%= product.category=="Jewellery"?"selected":"" %>>Jewellery</option>
+
+<option value="Exclusive Collection" <%= product.category=="Exclusive Collection"?"selected":"" %>>Exclusive Collection</option>
+
+</select>
+
+<label>Product Name</label>
+
+<input
+type="text"
+name="name"
+value="<%= product.name %>"
+required>
+
+<label>Price</label>
+
+<input
+type="text"
+name="price"
+value="<%= product.price %>"
+required>
+
+<label>Current Image</label>
+
+<img src="<%= product.image %>">
+
+<label>Change Image (Optional)</label>
+
+<input
+type="file"
+name="image"
+accept="image/*">
+
+<button type="submit">
+
+💾 Save Changes
+
+</button>
+
+</form>
+
+</div>
+
+</body>
+
+</html>

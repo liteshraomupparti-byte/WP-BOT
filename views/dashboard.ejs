@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mummy Shop Dashboard</title>
+    <style>
+        body{
+            margin:0;
+            font-family:Arial;
+            background:#f5f5f5;
+        }
+
+        .header{
+            background:#111;
+            color:white;
+            padding:20px;
+            text-align:center;
+            font-size:28px;
+        }
+
+        .container{
+            display:flex;
+            gap:20px;
+            padding:40px;
+            justify-content:center;
+        }
+
+        .card{
+            width:250px;
+            background:white;
+            border-radius:15px;
+            padding:30px;
+            text-align:center;
+            box-shadow:0 10px 25px rgba(0,0,0,.15);
+        }
+
+        .card a{
+            display:block;
+            margin-top:20px;
+            padding:12px;
+            background:#111;
+            color:white;
+            text-decoration:none;
+            border-radius:8px;
+        }
+
+        .card a:hover{
+            background:#d4af37;
+            color:black;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+👗 Devika Collection Admin
+</div>
+
+<div class="container">
+
+<div class="card">
+<h2>Add Product</h2>
+<p>Photo upload karo aur product add karo.</p>
+
+<a href="/admin/add-product">
+Open
+</a>
+
+</div>
+
+<div class="card">
+
+<h2>Products</h2>
+
+<p>Saare uploaded products dekho.</p>
+
+<a href="/admin/products">
+View
+</a>
+
+</div>
+
+</div>
+
+</body>
+</html>
