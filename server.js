@@ -96,10 +96,12 @@ app.post("/webhook", async (req, res) => {
         interactive?.list_reply?.id || interactive?.button_reply?.id;
 
         if (selectedId.startsWith("BUY_")) {
-    await handleBuyNow(from, selectedId);
+    await handleBuyNow(from, selectedId.replace("BUY_", ""));
     return;
 }
-      await handleBuyNow(from, selectedId.replace("BUY_", ""));
+
+await handleMenuSelection(from, selectedId);
+
     } else {
       await sendMainMenu(from);
     }
