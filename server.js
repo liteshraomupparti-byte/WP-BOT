@@ -211,26 +211,6 @@ async function handleMenuSelection(to, selectedId) {
   }
 });
 
-    await sendWhatsAppMessage(to, {
-  type: "interactive",
-  interactive: {
-    type: "button",
-    body: {
-      text: "Interested in this product?"
-    },
-    action: {
-      buttons: [
-        {
-          type: "reply",
-          reply: {
-            id: `BUY_${product.id}`,
-            title: "🛒 Buy Now"
-          }
-        }
-      ]
-    }
-  }
-});
 
 async function handleBuyNow(to, productId) {
 
