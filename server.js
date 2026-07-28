@@ -94,7 +94,12 @@ app.post("/webhook", async (req, res) => {
       const interactive = message.interactive;
       const selectedId =
         interactive?.list_reply?.id || interactive?.button_reply?.id;
-      await handleMenuSelection(from, selectedId);
+
+        if (selectedId.startsWith("BUY_")) {
+    await handleBuyNow(from, selectedId);
+    return;
+}
+      await handleBuyNow(from, selectedId.replace("BUY_", ""));
     } else {
       await sendMainMenu(from);
     }
@@ -180,15 +185,86 @@ async function handleMenuSelection(to, selectedId) {
   for(const product of filteredProducts){
 
     await sendWhatsAppMessage(to,{
+  type:"interactive",
+  interactive:{
+    type:"button",
+    header:{
       type:"image",
       image:{
-        link:product.image,
-        caption:
-`${product.name}
-
-₹${product.price}`
+        link: product.image
       }
-    });
+    },
+    body:{
+      text:`${product.name}\n\n₹${product.price}`
+    },
+    action:{
+      buttons:[
+        {
+          type:"reply",
+          reply:{
+            id:`BUY_${product.id}`,
+            title:"🛒 Buy Now"
+          }
+        }
+      ]
+    }
+  }
+});
+
+    await sendWhatsAppMessage(to, {
+  type: "interactive",
+  interactive: {
+    type: "button",
+    body: {
+      text: "Interested in this product?"
+    },
+    action: {
+      buttons: [
+        {
+          type: "reply",
+          reply: {
+            id: `BUY_${product.id}`,
+            title: "🛒 Buy Now"
+          }
+        }
+      ]
+    }
+  }
+});
+
+async function handleBuyNow(to, productId) {
+
+  const products = loadProducts();
+
+  const product = products.find(p => String(p.id) === String(productId));
+
+  if (!product) return;
+
+  // Customer ko confirmation
+  await sendWhatsAppMessage(to, {
+    type: "text",
+    text: {
+      body: "✅ Thank you! Your request has been sent to Devika Collections. We will contact you shortly."
+    }
+  });
+
+  // Mummy ko photo + details
+  await sendWhatsAppMessage("916260741302", {
+    type: "image",
+    image: {
+      link: product.image,
+      caption:
+`🛍 New Customer Interested
+
+📦 Product: ${product.name}
+💰 Price: ₹${product.price}
+
+📱 Customer: +${to}`
+    }
+  });
+
+}
+
 
     // Follow-up text with a way to go back
     await sendWhatsAppMessage(to, {
