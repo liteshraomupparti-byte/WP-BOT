@@ -213,6 +213,8 @@ async function handleMenuSelection(to, selectedId) {
   }
 });
 
+}
+
 
 async function handleBuyNow(to, productId) {
 
@@ -229,6 +231,7 @@ async function handleBuyNow(to, productId) {
       body: "✅ Thank you! Your request has been sent to Devika Collections. We will contact you shortly."
     }
   });
+
 
   // Mummy ko photo + details
   await sendWhatsAppMessage("916260741302", {
@@ -256,7 +259,7 @@ async function handleBuyNow(to, productId) {
       },
     });
   }
-}
+
 
 // ============================================================
 // 5) FREE TEXT — jab customer button/menu ke bajaye khud type kare
