@@ -64,7 +64,7 @@ products.push({
 
   price: req.body.price,
 
-  image: "/uploads/" + req.file.filename
+  image: process.env.BASE_URL + "/uploads/" + req.file.filename
 });
 
 fs.writeFileSync(productsFile, JSON.stringify(products, null, 2));
