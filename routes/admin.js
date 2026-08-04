@@ -1,8 +1,12 @@
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const express = require("express");
 const router = express.Router();
+const upload = require("../utils/uploads");
+const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
+const Product = require("../models/Product");
+
+// ============================================================
+// Admin Login & Dashboard Routes
+// ============================================================
 
 // Login Page
 router.get("/", (req, res) => {
@@ -19,117 +23,143 @@ router.get("/add-product", (req, res) => {
   res.render("add-product");
 });
 
-// Products Page
-router.get("/products", (req, res) => {
+// ============================================================
+// Products List Route
+// ============================================================
 
-const productsFile="./database/products.json";
-
-let products=[];
-
-if(fs.existsSync(productsFile)){
-
-products=JSON.parse(fs.readFileSync(productsFile));
-
-}
-
-res.render("products", { products });
-});
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "public/uploads");
-  },
-
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
+router.get("/products", async (req, res) => {
+  try {
+    const products = await Product.find().sort({ createdAt: -1 });
+    res.render("products", { products });
+  } catch (err) {
+    console.error("❌ Error fetching products:", err);
+    res.status(500).send("Error loading products");
+  }
 });
 
-const upload = multer({ storage });
+// ============================================================
+// Add Product Handler
+// ============================================================
 
-router.post("/add-product", upload.single("image"), (req, res) => {
-    const productsFile = "./database/products.json";
+router.post("/add-product", upload.single("image"), async (req, res) => {
+  try {
+    const { category, name, price, description } = req.body;
 
-let products = [];
+    if (!req.file) {
+      return res.status(400).send("Please select an image to upload.");
+    }
 
-if (fs.existsSync(productsFile)) {
-  products = JSON.parse(fs.readFileSync(productsFile));
-}
+    // Upload image to Cloudinary
+    const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
 
-products.push({
-  id: Date.now(),
+    // Save Product to MongoDB
+    await Product.create({
+      category,
+      name,
+      price,
+      description: description || "",
+      image: secure_url,
+      cloudinary_id: public_id,
+    });
 
-  category: req.body.category,
-
-  name: req.body.name,
-
-  price: req.body.price,
-
-  image: process.env.BASE_URL + "/uploads/" + req.file.filename
-});
-
-fs.writeFileSync(productsFile, JSON.stringify(products, null, 2));
-
-res.redirect("/admin/products");
-});
-
-// Delete Product
-router.post("/delete/:id", (req, res) => {
-
-    const productsFile = "./database/products.json";
-
-    let products = JSON.parse(fs.readFileSync(productsFile));
-
-    products = products.filter(p => p.id != req.params.id);
-
-    fs.writeFileSync(productsFile, JSON.stringify(products, null, 2));
-
+    console.log(`✅ Product Created: ${name}`);
     res.redirect("/admin/products");
+  } catch (err) {
+    console.error("❌ Add Product Error:", err);
+    res.status(500).send(`Add product failed: ${err.message}`);
+  }
 });
 
-
+// ============================================================
 // Edit Product Page
-router.get("/edit-product/:id", (req, res) => {
+// ============================================================
 
-    const productsFile = "./database/products.json";
-
-    let products = JSON.parse(fs.readFileSync(productsFile));
-
-    const product = products.find(p => p.id == req.params.id);
+router.get("/edit-product/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
 
     if (!product) {
-        return res.send("Product not found");
+      return res.status(404).send("Product not found");
     }
 
     res.render("edit-product", { product });
-
+  } catch (err) {
+    console.error("❌ Edit Product Page Error:", err);
+    res.status(500).send("Error loading product");
+  }
 });
 
+// ============================================================
+// Update Product Handler
+// ============================================================
 
-// Update Product
-router.post("/edit-product/:id", upload.single("image"), (req, res) => {
+router.post("/edit-product/:id", upload.single("image"), async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
 
-    const productsFile = "./database/products.json";
-
-    let products = JSON.parse(fs.readFileSync(productsFile));
-
-    const index = products.findIndex(p => p.id == req.params.id);
-
-    if (index === -1) {
-        return res.send("Product not found");
+    if (!product) {
+      return res.status(404).send("Product not found");
     }
 
-    products[index].category = req.body.category;
-    products[index].name = req.body.name;
-    products[index].price = req.body.price;
+    // Update text fields
+    product.category = req.body.category || product.category;
+    product.name = req.body.name || product.name;
+    product.price = req.body.price || product.price;
+    if (req.body.description !== undefined) {
+      product.description = req.body.description;
+    }
 
+    // If new image is uploaded
     if (req.file) {
-        products[index].image = "/uploads/" + req.file.filename;
+      // 1. Upload new image to Cloudinary
+      const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
+
+      // 2. Delete old image from Cloudinary
+      if (product.cloudinary_id) {
+        await deleteFromCloudinary(product.cloudinary_id);
+      }
+
+      // 3. Update image URLs
+      product.image = secure_url;
+      product.cloudinary_id = public_id;
     }
 
-    fs.writeFileSync(productsFile, JSON.stringify(products, null, 2));
+    await product.save();
+    console.log(`✅ Product Updated: ${product.name}`);
 
     res.redirect("/admin/products");
+  } catch (err) {
+    console.error("❌ Update Product Error:", err);
+    res.status(500).send(`Update product failed: ${err.message}`);
+  }
+});
 
+// ============================================================
+// Delete Product Handler
+// ============================================================
+
+router.post("/delete/:id", async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).send("Product not found");
+    }
+
+    // 1. Delete image from Cloudinary
+    if (product.cloudinary_id) {
+      await deleteFromCloudinary(product.cloudinary_id);
+    }
+
+    // 2. Delete document from MongoDB
+    await Product.findByIdAndDelete(req.params.id);
+
+    console.log(`🗑 Product Deleted: ${product.name}`);
+    res.redirect("/admin/products");
+  } catch (err) {
+    console.error("❌ Delete Product Error:", err);
+    res.status(500).send(`Delete product failed: ${err.message}`);
+  }
 });
 
 module.exports = router;

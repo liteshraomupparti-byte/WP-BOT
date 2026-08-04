@@ -5,7 +5,6 @@
 <title>Add Product</title>
 
 <style>
-
 body{
 font-family:Arial;
 background:#f5f5f5;
@@ -21,12 +20,13 @@ border-radius:15px;
 box-shadow:0 10px 25px rgba(0,0,0,.15);
 }
 
-input,select{
+input,select,textarea{
 width:100%;
 padding:12px;
 margin-top:10px;
 margin-bottom:20px;
 font-size:16px;
+box-sizing:border-box;
 }
 
 button{
@@ -44,9 +44,7 @@ button:hover{
 background:#d4af37;
 color:black;
 }
-
 </style>
-
 </head>
 
 <body>
@@ -58,51 +56,30 @@ color:black;
 <form action="/admin/add-product" method="POST" enctype="multipart/form-data">
 
 <label>Category</label>
-
 <select name="category">
-
-<option>Sarees</option>
-
-<option>Lehengas</option>
-
-<option>Jewellery</option>
-
-<option>Exclusive Collection</option>
-
+<option value="Sarees">Sarees</option>
+<option value="Lehengas">Lehengas</option>
+<option value="Jewellery">Jewellery</option>
+<option value="Exclusive Collection">Exclusive Collection</option>
 </select>
 
 <label>Product Name</label>
-
-<input
-type="text"
-name="name"
-required>
+<input type="text" name="name" required placeholder="Enter product title">
 
 <label>Price</label>
+<input type="text" name="price" required placeholder="e.g. 2500">
 
-<input
-type="text"
-name="price"
-required>
+<label>Description (Optional)</label>
+<textarea name="description" rows="3" placeholder="Enter product description"></textarea>
 
-<label>Product Image</label>
+<label>Product Image (JPEG, JPG, PNG, WEBP - Max 10MB)</label>
+<input type="file" name="image" accept="image/jpeg,image/jpg,image/png,image/webp" required>
 
-<input
-type="file"
-name="image"
-accept="image/*"
-required>
-
-<button>
-
-Save Product
-
-</button>
+<button type="submit">Save Product</button>
 
 </form>
 
 </div>
 
 </body>
-
 </html>
