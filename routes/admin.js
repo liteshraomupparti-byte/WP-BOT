@@ -1,37 +1,8 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const router = express.Router();
 const upload = require("../utils/uploads");
 const { uploadToCloudinary, deleteFromCloudinary, isCloudinaryConfigured } = require("../utils/cloudinary");
-const Product = require("../models/Product");
-
-/**
- * Check if MongoDB Atlas connection is currently active (readyState === 1)
- */
-function isDatabaseConnected() {
-  return mongoose.connection && mongoose.connection.readyState === 1;
-}
-
-/**
- * Helper to find a product safely by ObjectId or Legacy custom String ID
- */
-async function findProductById(idStr) {
-  if (!idStr || !isDatabaseConnected()) return null;
-
-  // 1. Check if idStr is a valid 24-character hexadecimal MongoDB ObjectId
-  if (mongoose.Types.ObjectId.isValid(idStr)) {
-    const product = await Product.findById(idStr);
-    if (product) return product;
-  }
-
-  // 2. Fall back to querying by custom_id or String ID (legacy support)
-  return await Product.findOne({
-    $or: [
-      { custom_id: String(idStr) },
-      { id: String(idStr) }
-    ]
-  });
-}
+const productStore = require("../utils/productStore");
 
 // ============================================================
 // Admin Login & Dashboard Routes
@@ -58,14 +29,7 @@ router.get("/add-product", (req, res) => {
 
 router.get("/products", async (req, res) => {
   try {
-    let products = [];
-    
-    if (isDatabaseConnected()) {
-      products = await Product.find().sort({ createdAt: -1 });
-    } else {
-      console.warn("⚠️ MongoDB Atlas is not connected yet.");
-    }
-
+    const products = await productStore.getAllProducts();
     res.render("products", { products });
   } catch (err) {
     console.error("❌ Error fetching products:", err);
@@ -102,25 +66,11 @@ router.post("/add-product", upload.single("image"), async (req, res) => {
       `);
     }
 
-    if (!isDatabaseConnected()) {
-      return res.status(500).send(`
-        <div style="font-family: sans-serif; padding: 40px; text-align: center;">
-          <h2 style="color: #d32f2f;">⚠️ MongoDB Atlas Not Connected</h2>
-          <p>The database connection is not active yet.</p>
-          <p>Please check your Render Environment Variables for <strong>MONGODB_URI</strong> and verify MongoDB Atlas <strong>Network Access (0.0.0.0/0)</strong>.</p>
-          <br>
-          <a href="/admin/add-product" style="padding: 10px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 5px;">Go Back</a>
-        </div>
-      `);
-    }
-
     // Upload image buffer to Cloudinary
     const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
 
-    // Save Product to MongoDB
-    const customId = Date.now().toString();
-    await Product.create({
-      custom_id: customId,
+    // Save Product through hybrid product store (MongoDB Atlas or JSON fallback)
+    await productStore.createProduct({
       category,
       name,
       price,
@@ -143,7 +93,7 @@ router.post("/add-product", upload.single("image"), async (req, res) => {
 
 router.get("/edit-product/:id", async (req, res) => {
   try {
-    const product = await findProductById(req.params.id);
+    const product = await productStore.getProductById(req.params.id);
 
     if (!product) {
       return res.status(404).send("Product not found");
@@ -162,19 +112,14 @@ router.get("/edit-product/:id", async (req, res) => {
 
 router.post("/edit-product/:id", upload.single("image"), async (req, res) => {
   try {
-    const product = await findProductById(req.params.id);
+    const productId = req.params.id;
+    const existingProduct = await productStore.getProductById(productId);
 
-    if (!product) {
+    if (!existingProduct) {
       return res.status(404).send("Product not found");
     }
 
-    // Update text fields
-    product.category = req.body.category || product.category;
-    product.name = req.body.name || product.name;
-    product.price = req.body.price || product.price;
-    if (req.body.description !== undefined) {
-      product.description = req.body.description;
-    }
+    let newImage = null;
 
     // If new image is uploaded from gallery
     if (req.file) {
@@ -190,20 +135,17 @@ router.post("/edit-product/:id", upload.single("image"), async (req, res) => {
       }
 
       // 1. Upload new image buffer to Cloudinary
-      const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
+      newImage = await uploadToCloudinary(req.file.buffer);
 
       // 2. Delete old image from Cloudinary if public_id exists
-      if (product.cloudinary_id) {
-        await deleteFromCloudinary(product.cloudinary_id);
+      if (existingProduct.cloudinary_id) {
+        await deleteFromCloudinary(existingProduct.cloudinary_id);
       }
-
-      // 3. Update image fields
-      product.image = secure_url;
-      product.cloudinary_id = public_id;
     }
 
-    await product.save();
-    console.log(`✅ Product Updated Successfully: ${product.name}`);
+    // 3. Update product in product store
+    await productStore.updateProduct(productId, req.body, newImage);
+    console.log(`✅ Product Updated Successfully: ${req.body.name || existingProduct.name}`);
 
     res.redirect("/admin/products");
   } catch (err) {
@@ -219,20 +161,14 @@ router.post("/edit-product/:id", upload.single("image"), async (req, res) => {
 router.post("/delete/:id", async (req, res) => {
   try {
     const productId = req.params.id;
-    const product = await findProductById(productId);
+    const product = await productStore.getProductById(productId);
 
-    if (product) {
-      // 1. Delete image from Cloudinary if public_id exists
-      if (product.cloudinary_id) {
-        await deleteFromCloudinary(product.cloudinary_id);
-      }
-
-      // 2. Delete document safely using Mongoose deleteOne with _id
-      await Product.deleteOne({ _id: product._id });
-      console.log(`🗑 Product Deleted Successfully: ${product.name}`);
-    } else {
-      console.warn(`⚠️ Product not found for deletion: ${productId}`);
+    if (product && product.cloudinary_id) {
+      await deleteFromCloudinary(product.cloudinary_id);
     }
+
+    await productStore.deleteProduct(productId);
+    console.log(`🗑 Product Deleted Successfully`);
 
     res.redirect("/admin/products");
   } catch (err) {

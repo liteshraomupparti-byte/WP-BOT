@@ -9,10 +9,9 @@ const axios = require("axios");
 const path = require("path");
 const session = require("express-session");
 const bodyParser = require("body-parser");
-const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
-const Product = require("./models/Product");
+const productStore = require("./utils/productStore");
 
 const app = express();
 
@@ -188,7 +187,7 @@ async function sendMainMenu(to) {
 }
 
 // ============================================================
-// Handle Category Selection (MongoDB Query)
+// Handle Category Selection (Hybrid Store Query)
 // ============================================================
 
 async function handleMenuSelection(to, selectedId) {
@@ -196,21 +195,8 @@ async function handleMenuSelection(to, selectedId) {
     return sendMainMenu(to);
   }
 
-  if (!mongoose.connection || mongoose.connection.readyState !== 1) {
-    return await sendWhatsAppMessage(to, {
-      type: "text",
-      text: {
-        body: "⚠️ System is connecting to database. Please try again in a few seconds.",
-      },
-    });
-  }
-
   const category = selectedId.replace("CAT_", "");
-
-  // Query MongoDB Atlas directly for fresh product list
-  const filteredProducts = await Product.find({
-    category: new RegExp("^" + category + "$", "i"),
-  }).sort({ createdAt: -1 });
+  const filteredProducts = await productStore.getAllProducts(category);
 
   if (filteredProducts.length === 0) {
     return await sendWhatsAppMessage(to, {
@@ -223,7 +209,7 @@ async function handleMenuSelection(to, selectedId) {
 
   // Send interactive card for every product found
   for (const product of filteredProducts) {
-    const prodId = product._id ? product._id.toString() : product.custom_id;
+    const prodId = product._id ? product._id.toString() : (product.id || product.custom_id);
     await sendWhatsAppMessage(to, {
       type: "interactive",
       interactive: {
@@ -267,33 +253,11 @@ async function handleMenuSelection(to, selectedId) {
 }
 
 // ============================================================
-// Handle Buy Now (Safely Supports ObjectId & Custom String IDs)
+// Handle Buy Now (Hybrid Store Query)
 // ============================================================
 
 async function handleBuyNow(to, productId) {
-  if (!mongoose.connection || mongoose.connection.readyState !== 1) {
-    return await sendWhatsAppMessage(to, {
-      type: "text",
-      text: {
-        body: "⚠️ System is connecting to database. Please try again in a few seconds.",
-      },
-    });
-  }
-
-  let product = null;
-
-  if (mongoose.Types.ObjectId.isValid(productId)) {
-    product = await Product.findById(productId);
-  }
-
-  if (!product) {
-    product = await Product.findOne({
-      $or: [
-        { custom_id: String(productId) },
-        { id: String(productId) },
-      ],
-    });
-  }
+  const product = await productStore.getProductById(productId);
 
   if (!product) {
     return await sendWhatsAppMessage(to, {
