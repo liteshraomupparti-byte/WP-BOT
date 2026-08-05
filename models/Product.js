@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const productSchema = new mongoose.Schema(
   {
+    custom_id: {
+      type: String,
+      default: "",
+    },
     category: {
       type: String,
       required: [true, "Category is required"],
@@ -37,5 +41,10 @@ const productSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+// Virtual for id getter/setter to support both _id and legacy id
+productSchema.virtual("id_str").get(function () {
+  return this._id ? this._id.toString() : this.custom_id;
+});
 
 module.exports = mongoose.model("Product", productSchema);

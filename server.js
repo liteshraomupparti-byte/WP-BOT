@@ -9,6 +9,7 @@ const axios = require("axios");
 const path = require("path");
 const session = require("express-session");
 const bodyParser = require("body-parser");
+const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
 const Product = require("./models/Product");
@@ -213,6 +214,7 @@ async function handleMenuSelection(to, selectedId) {
 
   // Send interactive card for every product found
   for (const product of filteredProducts) {
+    const prodId = product._id ? product._id.toString() : product.custom_id;
     await sendWhatsAppMessage(to, {
       type: "interactive",
       interactive: {
@@ -236,7 +238,7 @@ async function handleMenuSelection(to, selectedId) {
             {
               type: "reply",
               reply: {
-                id: `BUY_${product._id}`,
+                id: `BUY_${prodId}`,
                 title: "🛒 Buy Now",
               },
             },
@@ -256,11 +258,24 @@ async function handleMenuSelection(to, selectedId) {
 }
 
 // ============================================================
-// Handle Buy Now (MongoDB Query)
+// Handle Buy Now (Safely Supports ObjectId & Custom String IDs)
 // ============================================================
 
 async function handleBuyNow(to, productId) {
-  const product = await Product.findById(productId);
+  let product = null;
+
+  if (mongoose.Types.ObjectId.isValid(productId)) {
+    product = await Product.findById(productId);
+  }
+
+  if (!product) {
+    product = await Product.findOne({
+      $or: [
+        { custom_id: String(productId) },
+        { id: String(productId) },
+      ],
+    });
+  }
 
   if (!product) {
     return await sendWhatsAppMessage(to, {

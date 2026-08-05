@@ -1,8 +1,30 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const upload = require("../utils/uploads");
 const { uploadToCloudinary, deleteFromCloudinary, isCloudinaryConfigured } = require("../utils/cloudinary");
 const Product = require("../models/Product");
+
+/**
+ * Helper to find a product safely by ObjectId or Legacy custom String ID
+ */
+async function findProductById(idStr) {
+  if (!idStr) return null;
+
+  // 1. Check if idStr is a valid 24-character hexadecimal MongoDB ObjectId
+  if (mongoose.Types.ObjectId.isValid(idStr)) {
+    const product = await Product.findById(idStr);
+    if (product) return product;
+  }
+
+  // 2. Fall back to querying by custom_id or String ID (legacy support)
+  return await Product.findOne({
+    $or: [
+      { custom_id: String(idStr) },
+      { id: String(idStr) }
+    ]
+  });
+}
 
 // ============================================================
 // Admin Login & Dashboard Routes
@@ -31,11 +53,11 @@ router.get("/products", async (req, res) => {
   try {
     let products = [];
     
-    // Attempt to fetch from MongoDB Atlas
+    // Fetch products from MongoDB Atlas
     try {
       products = await Product.find().sort({ createdAt: -1 });
     } catch (dbErr) {
-      console.warn("⚠️ MongoDB query warning (using fallback):", dbErr.message);
+      console.warn("⚠️ MongoDB query warning:", dbErr.message);
     }
 
     res.render("products", { products });
@@ -77,8 +99,10 @@ router.post("/add-product", upload.single("image"), async (req, res) => {
     // Upload image buffer to Cloudinary
     const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
 
-    // Save Product to MongoDB
+    // Save Product to MongoDB with standard ObjectId & custom_id fallback
+    const customId = Date.now().toString();
     await Product.create({
+      custom_id: customId,
       category,
       name,
       price,
@@ -101,7 +125,7 @@ router.post("/add-product", upload.single("image"), async (req, res) => {
 
 router.get("/edit-product/:id", async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductById(req.params.id);
 
     if (!product) {
       return res.status(404).send("Product not found");
@@ -120,7 +144,7 @@ router.get("/edit-product/:id", async (req, res) => {
 
 router.post("/edit-product/:id", upload.single("image"), async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await findProductById(req.params.id);
 
     if (!product) {
       return res.status(404).send("Product not found");
@@ -176,21 +200,22 @@ router.post("/edit-product/:id", upload.single("image"), async (req, res) => {
 
 router.post("/delete/:id", async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const productId = req.params.id;
+    const product = await findProductById(productId);
 
-    if (!product) {
-      return res.status(404).send("Product not found");
+    if (product) {
+      // 1. Delete image from Cloudinary if public_id exists
+      if (product.cloudinary_id) {
+        await deleteFromCloudinary(product.cloudinary_id);
+      }
+
+      // 2. Delete document safely using Mongoose deleteOne with _id
+      await Product.deleteOne({ _id: product._id });
+      console.log(`🗑 Product Deleted Successfully: ${product.name}`);
+    } else {
+      console.warn(`⚠️ Product not found for deletion: ${productId}`);
     }
 
-    // 1. Delete image from Cloudinary
-    if (product.cloudinary_id) {
-      await deleteFromCloudinary(product.cloudinary_id);
-    }
-
-    // 2. Delete document from MongoDB
-    await Product.findByIdAndDelete(req.params.id);
-
-    console.log(`🗑 Product Deleted Successfully: ${product.name}`);
     res.redirect("/admin/products");
   } catch (err) {
     console.error("❌ Delete Product Error:", err);
