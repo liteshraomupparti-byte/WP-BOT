@@ -196,6 +196,15 @@ async function handleMenuSelection(to, selectedId) {
     return sendMainMenu(to);
   }
 
+  if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+    return await sendWhatsAppMessage(to, {
+      type: "text",
+      text: {
+        body: "⚠️ System is connecting to database. Please try again in a few seconds.",
+      },
+    });
+  }
+
   const category = selectedId.replace("CAT_", "");
 
   // Query MongoDB Atlas directly for fresh product list
@@ -262,6 +271,15 @@ async function handleMenuSelection(to, selectedId) {
 // ============================================================
 
 async function handleBuyNow(to, productId) {
+  if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+    return await sendWhatsAppMessage(to, {
+      type: "text",
+      text: {
+        body: "⚠️ System is connecting to database. Please try again in a few seconds.",
+      },
+    });
+  }
+
   let product = null;
 
   if (mongoose.Types.ObjectId.isValid(productId)) {

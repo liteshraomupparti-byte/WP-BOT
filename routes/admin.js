@@ -6,10 +6,17 @@ const { uploadToCloudinary, deleteFromCloudinary, isCloudinaryConfigured } = req
 const Product = require("../models/Product");
 
 /**
+ * Check if MongoDB Atlas connection is currently active (readyState === 1)
+ */
+function isDatabaseConnected() {
+  return mongoose.connection && mongoose.connection.readyState === 1;
+}
+
+/**
  * Helper to find a product safely by ObjectId or Legacy custom String ID
  */
 async function findProductById(idStr) {
-  if (!idStr) return null;
+  if (!idStr || !isDatabaseConnected()) return null;
 
   // 1. Check if idStr is a valid 24-character hexadecimal MongoDB ObjectId
   if (mongoose.Types.ObjectId.isValid(idStr)) {
@@ -53,17 +60,16 @@ router.get("/products", async (req, res) => {
   try {
     let products = [];
     
-    // Fetch products from MongoDB Atlas
-    try {
+    if (isDatabaseConnected()) {
       products = await Product.find().sort({ createdAt: -1 });
-    } catch (dbErr) {
-      console.warn("⚠️ MongoDB query warning:", dbErr.message);
+    } else {
+      console.warn("⚠️ MongoDB Atlas is not connected yet.");
     }
 
     res.render("products", { products });
   } catch (err) {
     console.error("❌ Error fetching products:", err);
-    res.status(500).send("Error loading products");
+    res.render("products", { products: [] });
   }
 });
 
@@ -96,10 +102,22 @@ router.post("/add-product", upload.single("image"), async (req, res) => {
       `);
     }
 
+    if (!isDatabaseConnected()) {
+      return res.status(500).send(`
+        <div style="font-family: sans-serif; padding: 40px; text-align: center;">
+          <h2 style="color: #d32f2f;">⚠️ MongoDB Atlas Not Connected</h2>
+          <p>The database connection is not active yet.</p>
+          <p>Please check your Render Environment Variables for <strong>MONGODB_URI</strong> and verify MongoDB Atlas <strong>Network Access (0.0.0.0/0)</strong>.</p>
+          <br>
+          <a href="/admin/add-product" style="padding: 10px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 5px;">Go Back</a>
+        </div>
+      `);
+    }
+
     // Upload image buffer to Cloudinary
     const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
 
-    // Save Product to MongoDB with standard ObjectId & custom_id fallback
+    // Save Product to MongoDB
     const customId = Date.now().toString();
     await Product.create({
       custom_id: customId,

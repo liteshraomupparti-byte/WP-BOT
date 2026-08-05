@@ -9,7 +9,12 @@ const connectDB = async () => {
   }
 
   try {
-    const conn = await mongoose.connect(mongoURI);
+    // Disable buffering so Mongoose returns clean errors immediately if connection drops instead of hanging for 10 seconds
+    mongoose.set("bufferCommands", false);
+
+    const conn = await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of hanging
+    });
     console.log(`✅ MongoDB Atlas Connected: ${conn.connection.host}`);
     return true;
   } catch (error) {
