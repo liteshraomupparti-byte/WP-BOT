@@ -1,15 +1,20 @@
 const mongoose = require("mongoose");
 
 const connectDB = async () => {
+  const mongoURI = process.env.MONGODB_URI;
+
+  if (!mongoURI || mongoURI.includes("<username>") || mongoURI.includes("your_mongodb_uri")) {
+    console.error("⚠️ MONGODB_URI is missing or contains placeholder values! Please set a valid MONGODB_URI in Render Environment Variables.");
+    return false;
+  }
+
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    const conn = await mongoose.connect(mongoURI);
     console.log(`✅ MongoDB Atlas Connected: ${conn.connection.host}`);
+    return true;
   } catch (error) {
     console.error(`❌ MongoDB Connection Error: ${error.message}`);
-    process.exit(1);
+    return false;
   }
 };
 

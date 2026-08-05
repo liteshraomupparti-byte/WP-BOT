@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const upload = require("../utils/uploads");
-const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
+const { uploadToCloudinary, deleteFromCloudinary, isCloudinaryConfigured } = require("../utils/cloudinary");
 const Product = require("../models/Product");
 
 // ============================================================
@@ -29,7 +29,15 @@ router.get("/add-product", (req, res) => {
 
 router.get("/products", async (req, res) => {
   try {
-    const products = await Product.find().sort({ createdAt: -1 });
+    let products = [];
+    
+    // Attempt to fetch from MongoDB Atlas
+    try {
+      products = await Product.find().sort({ createdAt: -1 });
+    } catch (dbErr) {
+      console.warn("⚠️ MongoDB query warning (using fallback):", dbErr.message);
+    }
+
     res.render("products", { products });
   } catch (err) {
     console.error("❌ Error fetching products:", err);
@@ -46,10 +54,27 @@ router.post("/add-product", upload.single("image"), async (req, res) => {
     const { category, name, price, description } = req.body;
 
     if (!req.file) {
-      return res.status(400).send("Please select an image to upload.");
+      return res.status(400).send("❌ Please select an image from your gallery to upload.");
     }
 
-    // Upload image to Cloudinary
+    if (!isCloudinaryConfigured()) {
+      return res.status(500).send(`
+        <div style="font-family: sans-serif; padding: 40px; text-align: center;">
+          <h2 style="color: #d32f2f;">⚠️ Cloudinary Credentials Missing on Render</h2>
+          <p>Image upload requires Cloudinary environment variables.</p>
+          <p>Please go to <strong>Render Dashboard > Settings > Environment Variables</strong> and set:</p>
+          <ul style="display: inline-block; text-align: left;">
+            <li><code>CLOUDINARY_CLOUD_NAME</code></li>
+            <li><code>CLOUDINARY_API_KEY</code></li>
+            <li><code>CLOUDINARY_API_SECRET</code></li>
+          </ul>
+          <br><br>
+          <a href="/admin/add-product" style="padding: 10px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 5px;">Go Back</a>
+        </div>
+      `);
+    }
+
+    // Upload image buffer to Cloudinary
     const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
 
     // Save Product to MongoDB
@@ -62,7 +87,7 @@ router.post("/add-product", upload.single("image"), async (req, res) => {
       cloudinary_id: public_id,
     });
 
-    console.log(`✅ Product Created: ${name}`);
+    console.log(`✅ Product Created Successfully: ${name}`);
     res.redirect("/admin/products");
   } catch (err) {
     console.error("❌ Add Product Error:", err);
@@ -109,23 +134,34 @@ router.post("/edit-product/:id", upload.single("image"), async (req, res) => {
       product.description = req.body.description;
     }
 
-    // If new image is uploaded
+    // If new image is uploaded from gallery
     if (req.file) {
-      // 1. Upload new image to Cloudinary
+      if (!isCloudinaryConfigured()) {
+        return res.status(500).send(`
+          <div style="font-family: sans-serif; padding: 40px; text-align: center;">
+            <h2 style="color: #d32f2f;">⚠️ Cloudinary Credentials Missing on Render</h2>
+            <p>Please set <code>CLOUDINARY_CLOUD_NAME</code>, <code>CLOUDINARY_API_KEY</code>, and <code>CLOUDINARY_API_SECRET</code> in Render Environment Settings.</p>
+            <br>
+            <a href="/admin/products" style="padding: 10px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 5px;">Back to Products</a>
+          </div>
+        `);
+      }
+
+      // 1. Upload new image buffer to Cloudinary
       const { secure_url, public_id } = await uploadToCloudinary(req.file.buffer);
 
-      // 2. Delete old image from Cloudinary
+      // 2. Delete old image from Cloudinary if public_id exists
       if (product.cloudinary_id) {
         await deleteFromCloudinary(product.cloudinary_id);
       }
 
-      // 3. Update image URLs
+      // 3. Update image fields
       product.image = secure_url;
       product.cloudinary_id = public_id;
     }
 
     await product.save();
-    console.log(`✅ Product Updated: ${product.name}`);
+    console.log(`✅ Product Updated Successfully: ${product.name}`);
 
     res.redirect("/admin/products");
   } catch (err) {
@@ -154,7 +190,7 @@ router.post("/delete/:id", async (req, res) => {
     // 2. Delete document from MongoDB
     await Product.findByIdAndDelete(req.params.id);
 
-    console.log(`🗑 Product Deleted: ${product.name}`);
+    console.log(`🗑 Product Deleted Successfully: ${product.name}`);
     res.redirect("/admin/products");
   } catch (err) {
     console.error("❌ Delete Product Error:", err);

@@ -28,7 +28,7 @@ const productSchema = new mongoose.Schema(
     },
     cloudinary_id: {
       type: String,
-      required: [true, "Cloudinary public ID is required"],
+      default: "",
     },
   },
   {

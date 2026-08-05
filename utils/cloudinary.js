@@ -1,10 +1,7 @@
 const cloudinary = require("cloudinary").v2;
+const { Readable } = require("stream");
 
-// Verify environment variables
-if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-  console.warn("⚠️ WARNING: Cloudinary environment variables (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) are missing!");
-}
-
+// Configure Cloudinary credentials
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -12,30 +9,42 @@ cloudinary.config({
 });
 
 /**
- * Upload a file buffer to Cloudinary with automatic JPG conversion and compression for 100% WhatsApp & browser compatibility
+ * Check if Cloudinary environment variables are configured
+ */
+const isCloudinaryConfigured = () => {
+  return (
+    !!process.env.CLOUDINARY_CLOUD_NAME &&
+    !!process.env.CLOUDINARY_API_KEY &&
+    !!process.env.CLOUDINARY_API_SECRET &&
+    process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name"
+  );
+};
+
+/**
+ * Upload a file buffer to Cloudinary using Node Stream
  * @param {Buffer} buffer - File buffer from Multer memoryStorage
  * @param {String} folder - Cloudinary folder name
  * @returns {Promise<{ secure_url: string, public_id: string }>}
  */
 const uploadToCloudinary = (buffer, folder = "mummy_shop_products") => {
   return new Promise((resolve, reject) => {
-    if (!process.env.CLOUDINARY_CLOUD_NAME) {
-      return reject(new Error("Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in Render Environment Variables."));
+    if (!isCloudinaryConfigured()) {
+      return reject(
+        new Error(
+          "Cloudinary credentials are missing! Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in your Render Environment Variables."
+        )
+      );
     }
 
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: folder,
-        resource_type: "image",
-        format: "jpg", // Converts PNG, WEBP, HEIC from gallery to standard JPG for 100% WhatsApp API compatibility
-        transformation: [
-          { width: 1200, height: 1200, crop: "limit", quality: "auto" }
-        ]
+        resource_type: "auto",
       },
       (error, result) => {
         if (error) {
-          console.error("❌ Cloudinary Upload Stream Error:", error);
-          return reject(error);
+          console.error("❌ Cloudinary Upload Error:", error);
+          return reject(new Error(`Cloudinary upload failed: ${error.message}`));
         }
         console.log("✅ Cloudinary Upload Successful:", result.secure_url);
         resolve({
@@ -45,7 +54,9 @@ const uploadToCloudinary = (buffer, folder = "mummy_shop_products") => {
       }
     );
 
-    uploadStream.end(buffer);
+    // Convert Buffer to Readable Stream for 100% reliable piping across Node versions
+    const bufferStream = Readable.from(buffer);
+    bufferStream.pipe(uploadStream);
   });
 };
 
@@ -55,7 +66,7 @@ const uploadToCloudinary = (buffer, folder = "mummy_shop_products") => {
  * @returns {Promise<any>}
  */
 const deleteFromCloudinary = async (publicId) => {
-  if (!publicId) return;
+  if (!publicId || !isCloudinaryConfigured()) return;
   try {
     const result = await cloudinary.uploader.destroy(publicId);
     console.log(`🗑 Cloudinary Image Deleted (${publicId}):`, result);
@@ -67,6 +78,7 @@ const deleteFromCloudinary = async (publicId) => {
 
 module.exports = {
   cloudinary,
+  isCloudinaryConfigured,
   uploadToCloudinary,
   deleteFromCloudinary,
 };
